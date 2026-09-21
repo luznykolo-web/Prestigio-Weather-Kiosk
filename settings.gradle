@@ -13,4 +13,4 @@ dependencyResolutionManagement {
     }
 }
 rootProject.name = "PrestigioWeatherStation"
-include(":app")
+include ':app'
