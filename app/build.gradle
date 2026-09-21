@@ -1,0 +1,14 @@
+plugins { id 'com.android.application' }
+
+android {
+    namespace 'pl.luznykolo.weatherkiosk'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId 'pl.luznykolo.weatherkiosk'
+        minSdk 22
+        targetSdk 28
+        versionCode 1
+        versionName '1.0'
+    }
+}
