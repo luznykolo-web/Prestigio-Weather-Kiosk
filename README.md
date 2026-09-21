@@ -1,12 +1,11 @@
-# Prestigio Weather Station v7 TLS
-Android 5.1 / API 22.
+# Prestigio Weather Station v8 DIAGNOSTIC
 
-Zmiany:
-- natywny interfejs Android (bez WebView)
-- lokalne ikony PNG (bez emoji)
-- prognoza godzinowa i 5 dni
-- brak fikcyjnych danych przy braku połączenia
-- Conscrypt 2.5.3 jest dołączany do APK jako nowoczesny provider TLS
-- połączenie z Open-Meteo nie korzysta z przestarzałego silnika TLS Androida 5.1
-- czytelny komunikat diagnostyczny przy błędzie połączenia
-- cache ostatniej poprawnej prognozy
+Wersja diagnostyczna dla Androida 5.1.
+Pokazuje:
+- nazwę aktywnego providera TLS podczas łączenia,
+- klasę wyjątku,
+- pełny komunikat wyjątku,
+- do 4 zagnieżdżonych przyczyn (CAUSE).
+
+Pozostałe elementy v7 pozostają bez zmian.
+Po uruchomieniu zrób zdjęcie całego komunikatu w dolnej części ekranu.

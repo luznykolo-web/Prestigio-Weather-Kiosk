@@ -56,7 +56,28 @@ public class MainActivity extends Activity {
  TextView detail(LinearLayout p,String s){TextView v=tv(s,19);p.addView(v,new LinearLayout.LayoutParams(-1,43));return v;}
  LinearLayout panel(String title,LinearLayout parent,float weight){LinearLayout p=new LinearLayout(this);p.setOrientation(LinearLayout.VERTICAL);p.setPadding(10,5,10,4);parent.addView(p,new LinearLayout.LayoutParams(0,-1,weight));TextView t=tv(title,19);t.setTypeface(null,Typeface.BOLD);p.addView(t,new LinearLayout.LayoutParams(-1,35));return p;}
  void updateClock(){Date n=new Date();clock.setText(new SimpleDateFormat("HH:mm",Locale.getDefault()).format(n));date.setText(new SimpleDateFormat("EEEE, d MMMM yyyy",new Locale("pl","PL")).format(n));}
- void fetch(){status.setText("Łączenie…");new Thread(new Runnable(){public void run(){try{String j=get(URLS);getPreferences(0).edit().putString("cache",j).apply();show(j,true);}catch(final Exception e){final String c=getPreferences(0).getString("cache",null);if(c!=null)show(c,false);else runOnUiThread(new Runnable(){public void run(){String m=e.getClass().getSimpleName();status.setText("Błąd połączenia: "+m);}});}}}).start();}
+ void fetch(){
+  String provider="TLS";
+  try { provider=SSLContext.getInstance("TLS").getProvider().getName(); } catch(Exception ignored){}
+  status.setText("Łączenie… TLS provider: "+provider);
+  new Thread(new Runnable(){public void run(){try{String j=get(URLS);getPreferences(0).edit().putString("cache",j).apply();show(j,true);}catch(final Exception e){
+   final String c=getPreferences(0).getString("cache",null);
+   if(c!=null) show(c,false);
+   else runOnUiThread(new Runnable(){public void run(){
+     StringBuilder b=new StringBuilder();
+     b.append("BŁĄD: ").append(e.getClass().getSimpleName());
+     if(e.getMessage()!=null) b.append(" | ").append(e.getMessage());
+     Throwable x=e.getCause(); int n=0;
+     while(x!=null && n<4){
+       b.append(" | CAUSE ").append(n+1).append(": ").append(x.getClass().getSimpleName());
+       if(x.getMessage()!=null) b.append(": ").append(x.getMessage());
+       x=x.getCause(); n++;
+     }
+     status.setText(b.toString());
+     status.setTextSize(10);
+     status.setMaxLines(4);
+   }});
+  }}}).start();}
  String get(String u)throws Exception{
   SSLContext sc=SSLContext.getInstance("TLS");sc.init(null,null,null);
   HttpsURLConnection c=(HttpsURLConnection)new URL(u).openConnection();
