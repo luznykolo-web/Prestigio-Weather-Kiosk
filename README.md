@@ -1,12 +1,9 @@
-# Prestigio Weather Station v10 FINAL UI
-Bazą jest działająca v9 CA. Warstwa połączenia HTTPS, Conscrypt i dołączony ISRG Root X1 pozostają zachowane.
+# Prestigio Weather Station v9 CA
+Android 5.1 / API 22.
 
-Zmiany v10:
-- projekt docelowo pod ekran Prestigio 1024×600,
-- rozmiar zegara pozostaje 110sp,
-- rozmiar aktualnej temperatury pozostaje 54sp,
-- dynamiczne lokalne tapety: słonecznie, pochmurno, deszcz, burza, śnieg, mgła i noc,
-- tapeta nocna włącza się automatycznie na podstawie wschodu/zachodu słońca,
-- półprzezroczyste ciemne panele zwiększające czytelność,
-- wszystkie tapety i ikony są w APK — bez dodatkowego pobierania z internetu,
-- działające połączenie Open-Meteo z v9 nie zostało usunięte.
+Naprawa SSL:
+- do APK dołączony jest ISRG Root X1,
+- SHA-256: 96:BC:EC:06:26:49:76:F3:74:60:77:9A:CF:28:C5:A7:CF:E8:A3:C0:AA:E1:1A:8F:FC:EE:05:C0:BD:DF:08:C6
+- aplikacja tworzy własny zaufany KeyStore dla połączenia z Open-Meteo,
+- nie wyłącza weryfikacji certyfikatów ani hostname verification,
+- Conscrypt pozostaje providerem TLS.
