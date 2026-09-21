@@ -13,6 +13,10 @@ import java.text.*;
 import java.util.*;
 import javax.net.ssl.*;
 import java.security.Security;
+import java.security.KeyStore;
+import java.security.cert.Certificate;
+import java.security.cert.CertificateFactory;
+import javax.net.ssl.TrustManagerFactory;
 import org.conscrypt.Conscrypt;
 
 public class MainActivity extends Activity {
@@ -79,7 +83,21 @@ public class MainActivity extends Activity {
    }});
   }}}).start();}
  String get(String u)throws Exception{
-  SSLContext sc=SSLContext.getInstance("TLS");sc.init(null,null,null);
+  CertificateFactory cf=CertificateFactory.getInstance("X.509");
+  InputStream caIn=getResources().openRawResource(R.raw.isrgrootx1);
+  Certificate ca;
+  try { ca=cf.generateCertificate(caIn); } finally { caIn.close(); }
+
+  KeyStore ks=KeyStore.getInstance(KeyStore.getDefaultType());
+  ks.load(null,null);
+  ks.setCertificateEntry("isrg-root-x1",ca);
+
+  TrustManagerFactory tmf=TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
+  tmf.init(ks);
+
+  SSLContext sc=SSLContext.getInstance("TLS");
+  sc.init(null,tmf.getTrustManagers(),null);
+
   HttpsURLConnection c=(HttpsURLConnection)new URL(u).openConnection();
   c.setSSLSocketFactory(sc.getSocketFactory());
   c.setConnectTimeout(20000);c.setReadTimeout(20000);

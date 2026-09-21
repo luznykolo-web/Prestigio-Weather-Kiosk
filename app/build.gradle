@@ -10,8 +10,8 @@ android {
         applicationId "pl.luznykolo.prestigioweather"
         minSdk 22
         targetSdk 28
-        versionCode 8
-        versionName "8.0"
+        versionCode 9
+        versionName "9.0"
     }
 }
 
