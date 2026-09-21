@@ -1,211 +1,87 @@
 package pl.luznykolo.prestigioweather;
 
 import android.app.Activity;
-import android.os.Bundle;
-import android.os.Handler;
-import android.view.View;
-import android.view.Window;
-import android.view.WindowManager;
-import android.webkit.WebSettings;
-import android.webkit.WebView;
-import android.webkit.WebViewClient;
-
-import org.json.JSONObject;
-
-import java.io.BufferedReader;
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.net.URL;
-import java.nio.charset.Charset;
-import java.util.Locale;
-
-import javax.net.ssl.HttpsURLConnection;
-import javax.net.ssl.SSLContext;
-import javax.net.ssl.SSLSocket;
-import javax.net.ssl.SSLSocketFactory;
+import android.os.*;
+import android.graphics.Color;
+import android.graphics.Typeface;
+import android.view.*;
+import android.widget.*;
+import org.json.*;
+import java.io.*;
+import java.net.*;
+import java.text.*;
+import java.util.*;
+import javax.net.ssl.*;
+import java.security.Security;
+import org.conscrypt.Conscrypt;
 
 public class MainActivity extends Activity {
-    private WebView webView;
-    private final Handler handler = new Handler();
-    private boolean pageReady = false;
+ LinearLayout root, hours, days; TextView status,temp,desc,feels,humidity,wind,sunrise,sunset,clock,date;
+ ImageView currentIcon; Handler h=new Handler();
+ final String URLS="https://api.open-meteo.com/v1/forecast?latitude=51.1136&longitude=20.8716&current=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,wind_speed_10m&hourly=temperature_2m,precipitation_probability,weather_code&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,sunrise,sunset&timezone=Europe%2FWarsaw&forecast_days=6";
+ final Runnable ticker=new Runnable(){public void run(){updateClock();h.postDelayed(this,1000);}};
+ final Runnable refresh=new Runnable(){public void run(){fetch();h.postDelayed(this,15*60*1000);}};
 
-    private static final long REFRESH_MS = 15L * 60L * 1000L;
-    private static final String WEATHER_URL =
-            "https://api.open-meteo.com/v1/forecast" +
-            "?latitude=51.1136&longitude=20.8716" +
-            "&current=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,wind_speed_10m" +
-            "&hourly=temperature_2m,weather_code" +
-            "&daily=weather_code,temperature_2m_max,temperature_2m_min,sunrise,sunset" +
-            "&timezone=Europe%2FWarsaw&forecast_days=6";
+ @Override public void onCreate(Bundle b){
+  super.onCreate(b);
+  try {
+    // Bundled modern TLS provider. This bypasses the obsolete TLS engine in Android 5.1.
+    Security.insertProviderAt(Conscrypt.newProvider(), 1);
+  } catch (Throwable ignored) {}
+  getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+  hide();build();ticker.run();refresh.run();
+ }
+ TextView tv(String s,int sp){TextView v=new TextView(this);v.setText(s);v.setTextColor(Color.WHITE);v.setTextSize(sp);v.setGravity(Gravity.CENTER_VERTICAL);return v;}
+ LinearLayout row(){LinearLayout l=new LinearLayout(this);l.setOrientation(LinearLayout.HORIZONTAL);return l;}
+ void build(){
+  root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);root.setPadding(20,10,20,6);root.setBackgroundColor(Color.rgb(5,42,76));setContentView(root);
+  LinearLayout top=row();root.addView(top,new LinearLayout.LayoutParams(-1,300));
+  LinearLayout left=new LinearLayout(this);left.setOrientation(LinearLayout.VERTICAL);top.addView(left,new LinearLayout.LayoutParams(0,-1,1.25f));
+  clock=tv("--:--",110);clock.setTypeface(null,Typeface.BOLD);left.addView(clock,new LinearLayout.LayoutParams(-1,150));
+  date=tv("",22);date.setTypeface(null,Typeface.BOLD);left.addView(date,new LinearLayout.LayoutParams(-1,38));
+  LinearLayout cur=row();left.addView(cur,new LinearLayout.LayoutParams(-1,105));
+  currentIcon=new ImageView(this);currentIcon.setImageResource(R.drawable.ic_cloud);currentIcon.setScaleType(ImageView.ScaleType.CENTER_INSIDE);cur.addView(currentIcon,new LinearLayout.LayoutParams(150,-1));
+  LinearLayout ct=new LinearLayout(this);ct.setOrientation(LinearLayout.VERTICAL);cur.addView(ct,new LinearLayout.LayoutParams(0,-1,1));
+  temp=tv("--°C",54);temp.setTypeface(null,Typeface.BOLD);ct.addView(temp,new LinearLayout.LayoutParams(-1,65));desc=tv("Oczekiwanie na dane…",20);desc.setTypeface(null,Typeface.BOLD);ct.addView(desc);
 
-    private final Runnable refreshRunnable = new Runnable() {
-        @Override public void run() {
-            fetchWeather();
-            handler.postDelayed(this, REFRESH_MS);
-        }
-    };
+  LinearLayout right=new LinearLayout(this);right.setOrientation(LinearLayout.VERTICAL);right.setPadding(28,12,0,0);top.addView(right,new LinearLayout.LayoutParams(0,-1,1));
+  TextView city=tv("SKARŻYSKO-KAMIENNA",18);city.setGravity(Gravity.RIGHT);city.setTypeface(null,Typeface.BOLD);right.addView(city,new LinearLayout.LayoutParams(-1,60));
+  feels=detail(right,"Odczuwalna: --°C");humidity=detail(right,"Wilgotność: --%");wind=detail(right,"Wiatr: -- km/h");sunrise=detail(right,"Wschód słońca: --:--");sunset=detail(right,"Zachód słońca: --:--");
 
-    @Override
-    protected void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
-        requestWindowFeature(Window.FEATURE_NO_TITLE);
-        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-        hideSystemUI();
-
-        webView = new WebView(this);
-        setContentView(webView);
-
-        WebSettings s = webView.getSettings();
-        s.setJavaScriptEnabled(true);
-        s.setDomStorageEnabled(true);
-        s.setAllowFileAccess(true);
-        s.setDefaultTextEncodingName("utf-8");
-        s.setCacheMode(WebSettings.LOAD_DEFAULT);
-
-        webView.setWebViewClient(new WebViewClient() {
-            @Override public void onPageFinished(WebView view, String url) {
-                pageReady = true;
-                showCachedWeather();
-                fetchWeather();
-            }
-        });
-        webView.loadUrl("file:///android_asset/index.html");
-    }
-
-    private void fetchWeather() {
-        new Thread(new Runnable() {
-            @Override public void run() {
-                HttpsURLConnection connection = null;
-                try {
-                    URL url = new URL(WEATHER_URL);
-                    connection = (HttpsURLConnection) url.openConnection();
-                    connection.setSSLSocketFactory(new Tls12SocketFactory());
-                    connection.setConnectTimeout(15000);
-                    connection.setReadTimeout(15000);
-                    connection.setRequestMethod("GET");
-                    connection.setRequestProperty("Accept", "application/json");
-                    connection.setRequestProperty("User-Agent", "PrestigioWeatherStation/5.0");
-                    connection.connect();
-
-                    int code = connection.getResponseCode();
-                    if (code < 200 || code >= 300) throw new Exception("HTTP " + code);
-
-                    String json = readAll(connection.getInputStream());
-                    new JSONObject(json); // validate JSON
-                    getSharedPreferences("weather", MODE_PRIVATE)
-                            .edit().putString("last_json", json).apply();
-
-                    deliver(json, true);
-                } catch (Exception e) {
-                    String cached = getSharedPreferences("weather", MODE_PRIVATE)
-                            .getString("last_json", null);
-                    if (cached != null) deliver(cached, false);
-                    else setOfflineNoData();
-                } finally {
-                    if (connection != null) connection.disconnect();
-                }
-            }
-        }).start();
-    }
-
-    private String readAll(InputStream input) throws Exception {
-        BufferedReader r = new BufferedReader(
-                new InputStreamReader(input, Charset.forName("UTF-8")));
-        StringBuilder out = new StringBuilder();
-        String line;
-        while ((line = r.readLine()) != null) out.append(line);
-        r.close();
-        return out.toString();
-    }
-
-    private void showCachedWeather() {
-        String cached = getSharedPreferences("weather", MODE_PRIVATE)
-                .getString("last_json", null);
-        if (cached != null) deliver(cached, false);
-    }
-
-    private void deliver(final String json, final boolean online) {
-        runOnUiThread(new Runnable() {
-            @Override public void run() {
-                if (!pageReady) return;
-                String quoted = JSONObject.quote(json);
-                webView.evaluateJavascript(
-                        "window.receiveWeather(" + quoted + "," + online + ");", null);
-            }
-        });
-    }
-
-    private void setOfflineNoData() {
-        runOnUiThread(new Runnable() {
-            @Override public void run() {
-                if (pageReady) webView.evaluateJavascript("window.weatherFailed();", null);
-            }
-        });
-    }
-
-    private void hideSystemUI() {
-        getWindow().getDecorView().setSystemUiVisibility(
-                View.SYSTEM_UI_FLAG_LOW_PROFILE |
-                View.SYSTEM_UI_FLAG_FULLSCREEN |
-                View.SYSTEM_UI_FLAG_HIDE_NAVIGATION |
-                View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY |
-                View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN |
-                View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION |
-                View.SYSTEM_UI_FLAG_LAYOUT_STABLE);
-    }
-
-    @Override protected void onResume() {
-        super.onResume();
-        hideSystemUI();
-        handler.removeCallbacks(refreshRunnable);
-        handler.post(refreshRunnable);
-    }
-
-    @Override protected void onPause() {
-        handler.removeCallbacks(refreshRunnable);
-        super.onPause();
-    }
-
-    @Override public void onWindowFocusChanged(boolean hasFocus) {
-        super.onWindowFocusChanged(hasFocus);
-        if (hasFocus) hideSystemUI();
-    }
-
-    @Override public void onBackPressed() { }
-
-    // Android 5.0/5.1: force TLS 1.2 for HTTPS sockets.
-    private static class Tls12SocketFactory extends SSLSocketFactory {
-        private final SSLSocketFactory delegate;
-
-        Tls12SocketFactory() throws Exception {
-            SSLContext context = SSLContext.getInstance("TLSv1.2");
-            context.init(null, null, null);
-            delegate = context.getSocketFactory();
-        }
-
-        private java.net.Socket enable(java.net.Socket socket) {
-            if (socket instanceof SSLSocket) {
-                ((SSLSocket) socket).setEnabledProtocols(new String[]{"TLSv1.2"});
-            }
-            return socket;
-        }
-
-        @Override public String[] getDefaultCipherSuites() { return delegate.getDefaultCipherSuites(); }
-        @Override public String[] getSupportedCipherSuites() { return delegate.getSupportedCipherSuites(); }
-        @Override public java.net.Socket createSocket(java.net.Socket s, String h, int p, boolean a) throws java.io.IOException {
-            return enable(delegate.createSocket(s, h, p, a));
-        }
-        @Override public java.net.Socket createSocket(String h, int p) throws java.io.IOException {
-            return enable(delegate.createSocket(h, p));
-        }
-        @Override public java.net.Socket createSocket(String h, int p, java.net.InetAddress l, int lp) throws java.io.IOException {
-            return enable(delegate.createSocket(h, p, l, lp));
-        }
-        @Override public java.net.Socket createSocket(java.net.InetAddress h, int p) throws java.io.IOException {
-            return enable(delegate.createSocket(h, p));
-        }
-        @Override public java.net.Socket createSocket(java.net.InetAddress h, int p, java.net.InetAddress l, int lp) throws java.io.IOException {
-            return enable(delegate.createSocket(h, p, l, lp));
-        }
-    }
+  LinearLayout panels=row();root.addView(panels,new LinearLayout.LayoutParams(-1,0,1));
+  LinearLayout hp=panel("Prognoza godzinowa",panels,1.55f);hours=row();hp.addView(hours,new LinearLayout.LayoutParams(-1,0,1));
+  LinearLayout dp=panel("Prognoza na 5 dni",panels,1f);days=row();dp.addView(days,new LinearLayout.LayoutParams(-1,0,1));
+  status=tv("Łączenie…",11);root.addView(status,new LinearLayout.LayoutParams(-1,22));
+ }
+ TextView detail(LinearLayout p,String s){TextView v=tv(s,19);p.addView(v,new LinearLayout.LayoutParams(-1,43));return v;}
+ LinearLayout panel(String title,LinearLayout parent,float weight){LinearLayout p=new LinearLayout(this);p.setOrientation(LinearLayout.VERTICAL);p.setPadding(10,5,10,4);parent.addView(p,new LinearLayout.LayoutParams(0,-1,weight));TextView t=tv(title,19);t.setTypeface(null,Typeface.BOLD);p.addView(t,new LinearLayout.LayoutParams(-1,35));return p;}
+ void updateClock(){Date n=new Date();clock.setText(new SimpleDateFormat("HH:mm",Locale.getDefault()).format(n));date.setText(new SimpleDateFormat("EEEE, d MMMM yyyy",new Locale("pl","PL")).format(n));}
+ void fetch(){status.setText("Łączenie…");new Thread(new Runnable(){public void run(){try{String j=get(URLS);getPreferences(0).edit().putString("cache",j).apply();show(j,true);}catch(final Exception e){final String c=getPreferences(0).getString("cache",null);if(c!=null)show(c,false);else runOnUiThread(new Runnable(){public void run(){String m=e.getClass().getSimpleName();status.setText("Błąd połączenia: "+m);}});}}}).start();}
+ String get(String u)throws Exception{
+  SSLContext sc=SSLContext.getInstance("TLS");sc.init(null,null,null);
+  HttpsURLConnection c=(HttpsURLConnection)new URL(u).openConnection();
+  c.setSSLSocketFactory(sc.getSocketFactory());
+  c.setConnectTimeout(20000);c.setReadTimeout(20000);
+  c.setRequestProperty("Accept","application/json");
+  c.setRequestProperty("User-Agent","PrestigioWeather/7");
+  InputStream in=c.getInputStream();BufferedReader r=new BufferedReader(new InputStreamReader(in,"UTF-8"));StringBuilder b=new StringBuilder();String x;while((x=r.readLine())!=null)b.append(x);r.close();return b.toString();
+ }
+ void show(final String raw,final boolean online){runOnUiThread(new Runnable(){public void run(){try{render(new JSONObject(raw));status.setText(online?"Dane pobrane: "+new SimpleDateFormat("dd.MM.yyyy HH:mm").format(new Date()):"Offline — ostatnie zapisane dane");}catch(Exception e){status.setText("Błąd danych pogodowych");}}});}
+ int icon(int c){if(c==0)return R.drawable.ic_sun;if(c<=2)return R.drawable.ic_partly;if(c==3||c==45||c==48)return R.drawable.ic_cloud;if((c>=51&&c<=67)||(c>=80&&c<=82))return R.drawable.ic_rain;if(c>=71&&c<=77)return R.drawable.ic_snow;return R.drawable.ic_cloud;}
+ String text(int c){if(c==0)return"Bezchmurnie";if(c<=2)return"Częściowe zachmurzenie";if(c==3)return"Pochmurno";if(c==45||c==48)return"Mgła";if(c>=51&&c<=57)return"Mżawka";if(c>=61&&c<=67)return"Deszcz";if(c>=71&&c<=77)return"Śnieg";if(c>=80&&c<=82)return"Przelotny deszcz";if(c>=95)return"Burza";return"Pogoda";}
+ int rnd(double d){return(int)Math.round(d);} String hm(String s){return s.length()>=16?s.substring(11,16):"--:--";}
+ void render(JSONObject j)throws Exception{
+  JSONObject c=j.getJSONObject("current");JSONObject d=j.getJSONObject("daily");JSONObject ho=j.getJSONObject("hourly");int code=c.getInt("weather_code");
+  currentIcon.setImageResource(icon(code));temp.setText(rnd(c.getDouble("temperature_2m"))+"°C");desc.setText(text(code));feels.setText("Odczuwalna: "+rnd(c.getDouble("apparent_temperature"))+"°C");humidity.setText("Wilgotność: "+rnd(c.getDouble("relative_humidity_2m"))+"%");wind.setText("Wiatr: "+rnd(c.getDouble("wind_speed_10m"))+" km/h");
+  sunrise.setText("Wschód słońca: "+hm(d.getJSONArray("sunrise").getString(0)));sunset.setText("Zachód słońca: "+hm(d.getJSONArray("sunset").getString(0)));
+  hours.removeAllViews();JSONArray ht=ho.getJSONArray("time"),hT=ho.getJSONArray("temperature_2m"),hc=ho.getJSONArray("weather_code"),pr=ho.getJSONArray("precipitation_probability");String now=new SimpleDateFormat("yyyy-MM-dd'T'HH:00").format(new Date());int start=0;for(int i=0;i<ht.length();i++)if(ht.getString(i).compareTo(now)>=0){start=i;break;}
+  for(int k=0;k<6&&start+k<ht.length();k++)addForecast(hours,hm(ht.getString(start+k)),icon(hc.getInt(start+k)),rnd(hT.getDouble(start+k))+"°C",pr.optInt(start+k,0)+"%");
+  days.removeAllViews();JSONArray dt=d.getJSONArray("time"),mx=d.getJSONArray("temperature_2m_max"),mn=d.getJSONArray("temperature_2m_min"),dc=d.getJSONArray("weather_code"),pp=d.getJSONArray("precipitation_probability_max");
+  SimpleDateFormat in=new SimpleDateFormat("yyyy-MM-dd",Locale.US), dn=new SimpleDateFormat("EEE",new Locale("pl","PL"));
+  for(int q=1;q<=5&&q<dt.length();q++)addForecast(days,dn.format(in.parse(dt.getString(q))),icon(dc.getInt(q)),rnd(mx.getDouble(q))+"° / "+rnd(mn.getDouble(q))+"°",pp.optInt(q,0)+"%");
+ }
+ void addForecast(LinearLayout p,String a,int res,String b,String rain){LinearLayout x=new LinearLayout(this);x.setOrientation(LinearLayout.VERTICAL);x.setGravity(Gravity.CENTER);p.addView(x,new LinearLayout.LayoutParams(0,-1,1));TextView t=tv(a,14);t.setGravity(Gravity.CENTER);x.addView(t,new LinearLayout.LayoutParams(-1,30));ImageView im=new ImageView(this);im.setImageResource(res);im.setScaleType(ImageView.ScaleType.CENTER_INSIDE);x.addView(im,new LinearLayout.LayoutParams(-1,55));TextView v=tv(b,17);v.setGravity(Gravity.CENTER);v.setTypeface(null,Typeface.BOLD);x.addView(v,new LinearLayout.LayoutParams(-1,32));TextView rr=tv("Opady "+rain,12);rr.setGravity(Gravity.CENTER);x.addView(rr);}
+ void hide(){getWindow().getDecorView().setSystemUiVisibility(5894|View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);}
+ @Override public void onWindowFocusChanged(boolean f){super.onWindowFocusChanged(f);if(f)hide();}
+ @Override public void onBackPressed(){}
 }
