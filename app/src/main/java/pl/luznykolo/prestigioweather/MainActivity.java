@@ -1,40 +1,508 @@
 package pl.luznykolo.prestigioweather;
-import android.app.*;import android.os.*;import android.view.*;import android.graphics.*;import android.graphics.drawable.*;import org.json.*;import java.io.*;import java.net.*;import java.text.*;import java.util.*;import javax.net.ssl.*;import java.security.*;import java.security.cert.Certificate;import java.security.cert.CertificateFactory;import org.conscrypt.Conscrypt;
 
-public class MainActivity extends Activity{
- WeatherView v; Handler h=new Handler();
- final String URLS="https://api.open-meteo.com/v1/forecast?latitude=51.1136&longitude=20.8716&current=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,wind_speed_10m,surface_pressure,visibility&hourly=temperature_2m,precipitation_probability,weather_code&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,sunrise,sunset&timezone=Europe%2FWarsaw&forecast_days=6";
- public void onCreate(Bundle b){super.onCreate(b);try{Security.insertProviderAt(Conscrypt.newProvider(),1);}catch(Throwable e){}getWindow().addFlags(128);hide();v=new WeatherView();setContentView(v);tick.run();refresh.run();}
- Runnable tick=new Runnable(){public void run(){v.invalidate();h.postDelayed(this,1000);}};
- Runnable refresh=new Runnable(){public void run(){fetch();h.postDelayed(this,900000);}};
- void fetch(){new Thread(new Runnable(){public void run(){try{String x=get(URLS);getPreferences(0).edit().putString("cache",x).apply();show(x,true);}catch(Exception e){String c=getPreferences(0).getString("cache",null);if(c!=null)show(c,false);else{v.status="Błąd połączenia";v.invalidate();}}}}).start();}
- String get(String u)throws Exception{CertificateFactory cf=CertificateFactory.getInstance("X.509");InputStream in=getResources().openRawResource(R.raw.isrgrootx1);Certificate ca;try{ca=cf.generateCertificate(in);}finally{in.close();}KeyStore ks=KeyStore.getInstance(KeyStore.getDefaultType());ks.load(null,null);ks.setCertificateEntry("isrg-root-x1",ca);TrustManagerFactory tmf=TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());tmf.init(ks);SSLContext sc=SSLContext.getInstance("TLS");sc.init(null,tmf.getTrustManagers(),null);HttpsURLConnection c=(HttpsURLConnection)new URL(u).openConnection();c.setSSLSocketFactory(sc.getSocketFactory());c.setConnectTimeout(20000);c.setReadTimeout(20000);c.setRequestProperty("Accept","application/json");c.setRequestProperty("User-Agent","PrestigioWeather/12");BufferedReader r=new BufferedReader(new InputStreamReader(c.getInputStream(),"UTF-8"));StringBuilder b=new StringBuilder();String z;while((z=r.readLine())!=null)b.append(z);r.close();return b.toString();}
- void show(final String raw,final boolean online){runOnUiThread(new Runnable(){public void run(){try{v.setData(new JSONObject(raw));v.status=online?"Ostatnia aktualizacja: "+new SimpleDateFormat("dd.MM.yyyy HH:mm").format(new Date()):"Offline — ostatnie dane";v.invalidate();}catch(Exception e){v.status="Błąd danych";}}});}
- int rnd(double x){return(int)Math.round(x);}String hm(String s){return s.length()>=16?s.substring(11,16):"--:--";}
- String wt(int c){if(c==0)return"Bezchmurnie";if(c<=2)return"Częściowe zachmurzenie";if(c==3)return"Pochmurno";if(c==45||c==48)return"Mgła";if(c>=51&&c<=57)return"Mżawka";if(c>=61&&c<=67)return"Deszcz";if(c>=71&&c<=77)return"Śnieg";if(c>=80&&c<=82)return"Przelotny deszcz";if(c>=95)return"Burza";return"Pogoda";}
- int icon(int c){if(c==0)return R.drawable.ic_sun;if(c<=2)return R.drawable.ic_partly;if(c==3||c==45||c==48)return R.drawable.ic_cloud;if((c>=51&&c<=67)||(c>=80&&c<=82))return R.drawable.ic_rain;if(c>=71&&c<=77)return R.drawable.ic_snow;return R.drawable.ic_cloud;}
- class WeatherView extends View{
-  Bitmap bg; Paint p=new Paint(3); JSONObject data; String status="Łączenie…"; Rect src=new Rect();
-  WeatherView(){super(MainActivity.this);bg=BitmapFactory.decodeResource(getResources(),R.drawable.dashboard_reference);}
-  void setData(JSONObject j){data=j;}
-  void txt(Canvas c,String s,float x,float y,float size,boolean bold,int color){p.setColor(color);p.setTextSize(size);p.setTypeface(bold?Typeface.DEFAULT_BOLD:Typeface.DEFAULT);p.setTextAlign(Paint.Align.LEFT);p.setStyle(Paint.Style.FILL);c.drawText(s,x,y,p);}
-  void center(Canvas c,String s,float x,float y,float size,boolean bold,int color){p.setColor(color);p.setTextSize(size);p.setTypeface(bold?Typeface.DEFAULT_BOLD:Typeface.DEFAULT);p.setTextAlign(Paint.Align.CENTER);p.setStyle(Paint.Style.FILL);c.drawText(s,x,y,p);}
-  void glass(Canvas c,float l,float t,float r,float b,float rad){p.setColor(Color.argb(220,2,37,65));p.setStyle(Paint.Style.FILL);c.drawRoundRect(l,t,r,b,rad,rad,p);p.setColor(Color.rgb(31,174,232));p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(1.2f);c.drawRoundRect(l,t,r,b,rad,rad,p);p.setStyle(Paint.Style.FILL);}
-  Bitmap bm(int id){return BitmapFactory.decodeResource(getResources(),id);}
-  protected void onDraw(Canvas c){super.onDraw(c);float sx=getWidth()/1024f,sy=getHeight()/600f;c.save();c.scale(sx,sy);src.set(0,0,bg.getWidth(),bg.getHeight());c.drawBitmap(bg,src,new Rect(0,0,1024,600),p);
-   // repaint every dynamic region over the reference, preserving the exact approved visual language
-   glass(c,28,72,492,224,15); glass(c,505,82,735,224,15); glass(c,748,35,994,276,15); glass(c,28,320,505,522,15); glass(c,520,320,994,522,15);
-   Date now=new Date();txt(c,new SimpleDateFormat("HH:mm").format(now),48,166,92,true,Color.WHITE);txt(c,new SimpleDateFormat("EEEE, d MMMM yyyy",new Locale("pl","PL")).format(now),48,207,19,true,Color.WHITE);
-   txt(c,"SKARŻYSKO-KAMIENNA",786,66,17,true,Color.WHITE);txt(c,"51.1136° N, 20.8716° E",786,88,12,false,Color.WHITE);
-   if(data!=null)try{JSONObject q=data.getJSONObject("current"),d=data.getJSONObject("daily"),ho=data.getJSONObject("hourly");int code=q.getInt("weather_code");Bitmap ic=bm(icon(code));c.drawBitmap(ic,null,new Rect(520,94,615,189),p);txt(c,rnd(q.getDouble("temperature_2m"))+"°C",616,161,58,true,Color.WHITE);txt(c,wt(code),616,196,17,true,Color.WHITE);
-    String[] lab={"Odczuwalna","Wilgotność","Wiatr","Ciśnienie","Widoczność"};String[] val={rnd(q.getDouble("apparent_temperature"))+"°C",rnd(q.getDouble("relative_humidity_2m"))+"%",rnd(q.getDouble("wind_speed_10m"))+" km/h",rnd(q.optDouble("surface_pressure",0))+" hPa",String.format(Locale.US,"%.0f km",q.optDouble("visibility",0)/1000.0)};int[] cols={0xffff594d,0xff21c7ff,0xff20e5aa,0xffffb400,0xffa86cff};for(int i=0;i<5;i++){p.setColor(cols[i]);c.drawCircle(770,119+i*35,8,p);txt(c,lab[i],790,125+i*35,15,false,Color.WHITE);p.setTextAlign(Paint.Align.RIGHT);txt(c,val[i],900,125+i*35,16,true,Color.WHITE);}
-    txt(c,"Prognoza godzinowa",48,350,19,true,Color.WHITE);txt(c,"Prognoza na 5 dni",540,350,19,true,Color.WHITE);p.setColor(0xff58d8ff);c.drawRect(48,362,485,363,p);c.drawRect(540,362,975,363,p);
-    JSONArray ht=ho.getJSONArray("time"),hT=ho.getJSONArray("temperature_2m"),hc=ho.getJSONArray("weather_code"),pr=ho.getJSONArray("precipitation_probability");String n=new SimpleDateFormat("yyyy-MM-dd'T'HH:00").format(now);int st=0;for(int i=0;i<ht.length();i++)if(ht.getString(i).compareTo(n)>=0){st=i;break;}for(int k=0;k<6;k++){int z=st+k;float x=70+k*72;center(c,hm(ht.getString(z)),x,388,13,false,Color.WHITE);Bitmap bi=bm(icon(hc.getInt(z)));c.drawBitmap(bi,null,new Rect((int)x-25,397,(int)x+25,447),p);center(c,rnd(hT.getDouble(z))+"°",x,474,18,true,Color.WHITE);center(c,"● "+pr.optInt(z,0)+"%",x,502,13,true,0xff26cfff);}
-    JSONArray dt=d.getJSONArray("time"),mx=d.getJSONArray("temperature_2m_max"),mn=d.getJSONArray("temperature_2m_min"),dc=d.getJSONArray("weather_code"),pp=d.getJSONArray("precipitation_probability_max");SimpleDateFormat inf=new SimpleDateFormat("yyyy-MM-dd",Locale.US),dn=new SimpleDateFormat("EEE",new Locale("pl","PL")),dd=new SimpleDateFormat("dd.MM");for(int k=1;k<=5;k++){float x=560+(k-1)*86;Date day=inf.parse(dt.getString(k));center(c,dn.format(day),x,387,14,true,Color.WHITE);center(c,dd.format(day),x,405,11,false,Color.WHITE);Bitmap bi=bm(icon(dc.getInt(k)));c.drawBitmap(bi,null,new Rect((int)x-25,410,(int)x+25,460),p);center(c,rnd(mx.getDouble(k))+"°",x,482,18,true,Color.WHITE);center(c,rnd(mn.getDouble(k))+"°",x,500,13,false,0xff73c9ff);center(c,"● "+pp.optInt(k,0)+"%",x,517,12,true,0xff26cfff);}
-   }catch(Exception e){}
-   // footer is always repainted
-   p.setColor(Color.argb(180,0,0,0));c.drawRect(0,548,1024,600,p);txt(c,"Stacja Pogodowa",25,580,14,false,Color.WHITE);p.setTextAlign(Paint.Align.RIGHT);txt(c,status,760,580,12,false,Color.WHITE);
-   c.restore();}
- }
- void hide(){getWindow().getDecorView().setSystemUiVisibility(5894|View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);}public void onWindowFocusChanged(boolean f){super.onWindowFocusChanged(f);if(f)hide();}public void onBackPressed(){}
+import android.app.Activity;
+import android.os.*;
+import android.graphics.*;
+import android.graphics.drawable.*;
+import android.view.*;
+import org.json.*;
+import java.io.*;
+import java.net.*;
+import java.text.*;
+import java.util.*;
+import javax.net.ssl.*;
+import java.security.Security;
+import java.security.KeyStore;
+import java.security.cert.Certificate;
+import java.security.cert.CertificateFactory;
+import javax.net.ssl.TrustManagerFactory;
+import org.conscrypt.Conscrypt;
+
+public class MainActivity extends Activity {
+    WeatherView view;
+    Handler h = new Handler();
+
+    final String URLS =
+        "https://api.open-meteo.com/v1/forecast?latitude=51.1136&longitude=20.8716" +
+        "&current=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,wind_speed_10m,wind_direction_10m,surface_pressure,visibility" +
+        "&hourly=temperature_2m,precipitation_probability,weather_code" +
+        "&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,sunrise,sunset" +
+        "&timezone=Europe%2FWarsaw&forecast_days=6";
+
+    final Runnable ticker = new Runnable() {
+        public void run() {
+            if (view != null) view.invalidate();
+            h.postDelayed(this, 1000);
+        }
+    };
+
+    final Runnable refresh = new Runnable() {
+        public void run() {
+            fetch();
+            h.postDelayed(this, 15 * 60 * 1000);
+        }
+    };
+
+    @Override public void onCreate(Bundle b) {
+        super.onCreate(b);
+        try {
+            Security.insertProviderAt(Conscrypt.newProvider(), 1);
+        } catch (Throwable ignored) {}
+        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        hide();
+        view = new WeatherView();
+        setContentView(view);
+        ticker.run();
+        refresh.run();
+    }
+
+    void fetch() {
+        view.status = "Łączenie…";
+        view.invalidate();
+
+        new Thread(new Runnable() {
+            public void run() {
+                try {
+                    String j = get(URLS);
+                    getPreferences(0).edit().putString("cache", j).apply();
+                    show(j, true);
+                } catch (final Exception e) {
+                    final String c = getPreferences(0).getString("cache", null);
+                    if (c != null) {
+                        show(c, false);
+                    } else {
+                        runOnUiThread(new Runnable() {
+                            public void run() {
+                                view.status = "Błąd połączenia: " + e.getClass().getSimpleName();
+                                view.invalidate();
+                            }
+                        });
+                    }
+                }
+            }
+        }).start();
+    }
+
+    // Networking / trust path retained from the working v9 baseline.
+    String get(String u) throws Exception {
+        CertificateFactory cf = CertificateFactory.getInstance("X.509");
+        InputStream caIn = getResources().openRawResource(R.raw.isrgrootx1);
+        Certificate ca;
+        try { ca = cf.generateCertificate(caIn); }
+        finally { caIn.close(); }
+
+        KeyStore ks = KeyStore.getInstance(KeyStore.getDefaultType());
+        ks.load(null, null);
+        ks.setCertificateEntry("isrg-root-x1", ca);
+
+        TrustManagerFactory tmf =
+            TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
+        tmf.init(ks);
+
+        SSLContext sc = SSLContext.getInstance("TLS");
+        sc.init(null, tmf.getTrustManagers(), null);
+
+        HttpsURLConnection c =
+            (HttpsURLConnection) new URL(u).openConnection();
+        c.setSSLSocketFactory(sc.getSocketFactory());
+        c.setConnectTimeout(20000);
+        c.setReadTimeout(20000);
+        c.setRequestProperty("Accept", "application/json");
+        c.setRequestProperty("User-Agent", "PrestigioWeather/13");
+
+        InputStream in = c.getInputStream();
+        BufferedReader r = new BufferedReader(new InputStreamReader(in, "UTF-8"));
+        StringBuilder b = new StringBuilder();
+        String x;
+        while ((x = r.readLine()) != null) b.append(x);
+        r.close();
+        return b.toString();
+    }
+
+    void show(final String raw, final boolean online) {
+        runOnUiThread(new Runnable() {
+            public void run() {
+                try {
+                    view.setData(new JSONObject(raw));
+                    view.status = online
+                        ? "Ostatnia aktualizacja: " +
+                          new SimpleDateFormat("dd.MM.yyyy HH:mm").format(new Date())
+                        : "Offline — ostatnie dane";
+                    view.invalidate();
+                } catch (Exception e) {
+                    view.status = "Błąd danych pogodowych";
+                    view.invalidate();
+                }
+            }
+        });
+    }
+
+    int rnd(double d) { return (int)Math.round(d); }
+
+    String hm(String s) {
+        return s != null && s.length() >= 16 ? s.substring(11, 16) : "--:--";
+    }
+
+    String weatherText(int c) {
+        if (c == 0) return "Bezchmurnie";
+        if (c <= 2) return "Częściowe zachmurzenie";
+        if (c == 3) return "Pochmurno";
+        if (c == 45 || c == 48) return "Mgła";
+        if (c >= 51 && c <= 57) return "Mżawka";
+        if (c >= 61 && c <= 67) return "Deszcz";
+        if (c >= 71 && c <= 77) return "Śnieg";
+        if (c >= 80 && c <= 82) return "Przelotny deszcz";
+        if (c >= 95) return "Burza";
+        return "Pogoda";
+    }
+
+    String windDir(double deg) {
+        String[] a = {"N","NE","E","SE","S","SW","W","NW"};
+        int i = (int)Math.round((((deg % 360) + 360) % 360) / 45.0) % 8;
+        return a[i];
+    }
+
+    class WeatherView extends View {
+        Paint p = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
+        JSONObject data;
+        String status = "Łączenie…";
+        Rect src = new Rect();
+
+        Bitmap bgDaySunny, bgDayCloudy, bgDayRain, bgDayStorm, bgDaySnow, bgDayFog;
+        Bitmap bgNightClear, bgNightCloudy, bgNightRain, bgNightStorm, bgNightSnow, bgNightFog;
+
+        Bitmap sun, partly, cloud, rain, moon, moonCloud, snow, storm, fog;
+        Bitmap pin, thermo, drop, windIcon, pressureIcon, eye;
+
+        WeatherView() {
+            super(MainActivity.this);
+            setLayerType(View.LAYER_TYPE_SOFTWARE, null);
+
+            bgDaySunny = load(R.drawable.bg_day_sunny);
+            bgDayCloudy = load(R.drawable.bg_day_cloudy);
+            bgDayRain = load(R.drawable.bg_day_rain);
+            bgDayStorm = load(R.drawable.bg_day_storm);
+            bgDaySnow = load(R.drawable.bg_day_snow);
+            bgDayFog = load(R.drawable.bg_day_fog);
+            bgNightClear = load(R.drawable.bg_night_clear);
+            bgNightCloudy = load(R.drawable.bg_night_cloudy);
+            bgNightRain = load(R.drawable.bg_night_rain);
+            bgNightStorm = load(R.drawable.bg_night_storm);
+            bgNightSnow = load(R.drawable.bg_night_snow);
+            bgNightFog = load(R.drawable.bg_night_fog);
+
+            sun = load(R.drawable.ic3d_sun);
+            partly = load(R.drawable.ic3d_partly);
+            cloud = load(R.drawable.ic3d_cloud);
+            rain = load(R.drawable.ic3d_rain);
+            moon = load(R.drawable.ic3d_moon);
+            moonCloud = load(R.drawable.ic3d_moon_cloud);
+            snow = load(R.drawable.ic3d_snow);
+            storm = load(R.drawable.ic3d_storm);
+            fog = load(R.drawable.ic3d_fog);
+
+            pin = load(R.drawable.ui_pin);
+            thermo = load(R.drawable.ui_thermo);
+            drop = load(R.drawable.ui_drop);
+            windIcon = load(R.drawable.ui_wind);
+            pressureIcon = load(R.drawable.ui_pressure);
+            eye = load(R.drawable.ui_eye);
+        }
+
+        Bitmap load(int id) {
+            return BitmapFactory.decodeResource(getResources(), id);
+        }
+
+        void setData(JSONObject j) { data = j; }
+
+        void setText(float size, boolean bold, int color) {
+            p.setTextSize(size);
+            p.setColor(color);
+            p.setTypeface(Typeface.create("sans-serif", bold ? Typeface.BOLD : Typeface.NORMAL));
+            p.setStyle(Paint.Style.FILL);
+            p.setTextAlign(Paint.Align.LEFT);
+            p.clearShadowLayer();
+        }
+
+        void txt(Canvas c, String s, float x, float y, float size, boolean bold) {
+            setText(size, bold, Color.WHITE);
+            p.setShadowLayer(2.5f, 0, 1, 0x99000000);
+            c.drawText(s, x, y, p);
+            p.clearShadowLayer();
+        }
+
+        void txtColor(Canvas c, String s, float x, float y, float size, boolean bold, int color) {
+            setText(size, bold, color);
+            p.setShadowLayer(2f, 0, 1, 0x99000000);
+            c.drawText(s, x, y, p);
+            p.clearShadowLayer();
+        }
+
+        void center(Canvas c, String s, float x, float y, float size, boolean bold, int color) {
+            setText(size, bold, color);
+            p.setTextAlign(Paint.Align.CENTER);
+            p.setShadowLayer(2f, 0, 1, 0x99000000);
+            c.drawText(s, x, y, p);
+            p.clearShadowLayer();
+        }
+
+        void right(Canvas c, String s, float x, float y, float size, boolean bold, int color) {
+            setText(size, bold, color);
+            p.setTextAlign(Paint.Align.RIGHT);
+            p.setShadowLayer(2f, 0, 1, 0x99000000);
+            c.drawText(s, x, y, p);
+            p.clearShadowLayer();
+        }
+
+        void glass(Canvas c, float l, float t, float r, float b, float radius) {
+            p.setStyle(Paint.Style.FILL);
+            p.setColor(Color.argb(225, 2, 33, 60));
+            c.drawRoundRect(l, t, r, b, radius, radius, p);
+            p.setStyle(Paint.Style.STROKE);
+            p.setStrokeWidth(1.4f);
+            p.setColor(Color.rgb(34, 182, 238));
+            c.drawRoundRect(l, t, r, b, radius, radius, p);
+            p.setStyle(Paint.Style.FILL);
+        }
+
+        void line(Canvas c, float x1, float y1, float x2, float y2) {
+            p.setColor(Color.argb(190, 70, 210, 255));
+            p.setStrokeWidth(1f);
+            c.drawLine(x1, y1, x2, y2, p);
+        }
+
+        void bitmap(Canvas c, Bitmap b, int l, int t, int r, int bot) {
+            if (b == null) return;
+            src.set(0, 0, b.getWidth(), b.getHeight());
+            c.drawBitmap(b, src, new Rect(l, t, r, bot), p);
+        }
+
+        boolean isNight(JSONObject daily) {
+            try {
+                String sr = daily.getJSONArray("sunrise").getString(0);
+                String ss = daily.getJSONArray("sunset").getString(0);
+                String now = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm", Locale.US).format(new Date());
+                return now.compareTo(sr) < 0 || now.compareTo(ss) > 0;
+            } catch (Exception e) {
+                Calendar cal = Calendar.getInstance();
+                int h = cal.get(Calendar.HOUR_OF_DAY);
+                return h < 6 || h >= 19;
+            }
+        }
+
+        boolean nightForTime(JSONObject daily, String iso) {
+            try {
+                String date = iso.substring(0,10);
+                JSONArray dates = daily.getJSONArray("time");
+                JSONArray sr = daily.getJSONArray("sunrise");
+                JSONArray ss = daily.getJSONArray("sunset");
+                for (int i=0;i<dates.length();i++) {
+                    if (date.equals(dates.getString(i))) {
+                        return iso.compareTo(sr.getString(i)) < 0 || iso.compareTo(ss.getString(i)) > 0;
+                    }
+                }
+            } catch (Exception ignored) {}
+            try {
+                int hh = Integer.parseInt(iso.substring(11,13));
+                return hh < 6 || hh >= 19;
+            } catch (Exception e) {
+                return false;
+            }
+        }
+
+        Bitmap weatherIcon(int code, boolean night) {
+            if (code == 0) return night ? moon : sun;
+            if (code <= 2) return night ? moonCloud : partly;
+            if (code == 3) return night ? moonCloud : cloud;
+            if (code == 45 || code == 48) return fog;
+            if (code >= 51 && code <= 67) return rain;
+            if (code >= 71 && code <= 77) return snow;
+            if (code >= 80 && code <= 82) return rain;
+            if (code >= 95) return storm;
+            return cloud;
+        }
+
+        Bitmap weatherBackground(int code, boolean night) {
+            if (night) {
+                if (code == 0) return bgNightClear;
+                if (code <= 3) return bgNightCloudy;
+                if (code == 45 || code == 48) return bgNightFog;
+                if (code >= 71 && code <= 77) return bgNightSnow;
+                if (code >= 95) return bgNightStorm;
+                if ((code >= 51 && code <= 67) || (code >= 80 && code <= 82)) return bgNightRain;
+                return bgNightCloudy;
+            } else {
+                if (code == 0) return bgDaySunny;
+                if (code <= 3) return bgDayCloudy;
+                if (code == 45 || code == 48) return bgDayFog;
+                if (code >= 71 && code <= 77) return bgDaySnow;
+                if (code >= 95) return bgDayStorm;
+                if ((code >= 51 && code <= 67) || (code >= 80 && code <= 82)) return bgDayRain;
+                return bgDayCloudy;
+            }
+        }
+
+        @Override protected void onDraw(Canvas raw) {
+            super.onDraw(raw);
+            float sx = getWidth() / 1024f;
+            float sy = getHeight() / 600f;
+            raw.save();
+            raw.scale(sx, sy);
+            Canvas c = raw;
+
+            JSONObject current = null, daily = null, hourly = null;
+            int code = 3;
+            boolean night = false;
+            try {
+                if (data != null) {
+                    current = data.getJSONObject("current");
+                    daily = data.getJSONObject("daily");
+                    hourly = data.getJSONObject("hourly");
+                    code = current.getInt("weather_code");
+                    night = isNight(daily);
+                }
+            } catch (Exception ignored) {}
+
+            Bitmap bg = weatherBackground(code, night);
+            if (bg != null) bitmap(c, bg, 0, 0, 1024, 600);
+            else c.drawColor(Color.rgb(5, 35, 62));
+
+            // Exact approved composition: large clock left, 3D condition icon center,
+            // large temperature, details right, two glass forecast panels below.
+            glass(c, 28, 73, 332, 220, 16);
+            glass(c, 515, 82, 735, 220, 16);
+            glass(c, 748, 28, 995, 288, 16);
+            glass(c, 25, 321, 510, 523, 16);
+            glass(c, 522, 321, 995, 523, 16);
+
+            Date now = new Date();
+            txt(c, new SimpleDateFormat("HH:mm", Locale.getDefault()).format(now), 45, 170, 100, true);
+            txt(c, new SimpleDateFormat("EEEE, d MMMM yyyy", new Locale("pl","PL")).format(now),
+                45, 205, 15, true);
+
+            txt(c, "SKARŻYSKO-KAMIENNA", 795, 59, 17, true);
+            txt(c, "51.1136° N, 20.8716° E", 795, 82, 12, false);
+            bitmap(c, pin, 758, 40, 790, 76);
+
+            if (current != null && daily != null && hourly != null) {
+                try {
+                    bitmap(c, weatherIcon(code, night), 350, 76, 510, 236);
+
+                    String temp = rnd(current.getDouble("temperature_2m")) + "°C";
+                    center(c, temp, 625, 166, 60, true, Color.WHITE);
+                    center(c, weatherText(code), 625, 199, 17, true, Color.WHITE);
+
+                    String[] labels = {"Odczuwalna", "Wilgotność", "Wiatr", "Ciśnienie", "Widoczność"};
+                    String windTxt = rnd(current.getDouble("wind_speed_10m")) + " km/h";
+                    if (current.has("wind_direction_10m")) {
+                        windTxt += "  " + windDir(current.getDouble("wind_direction_10m"));
+                    }
+                    String[] vals = {
+                        rnd(current.getDouble("apparent_temperature")) + "°C",
+                        rnd(current.getDouble("relative_humidity_2m")) + "%",
+                        windTxt,
+                        rnd(current.optDouble("surface_pressure", 0)) + " hPa",
+                        String.format(Locale.US, "%.0f km", current.optDouble("visibility", 0) / 1000.0)
+                    };
+                    Bitmap[] mi = {thermo, drop, windIcon, pressureIcon, eye};
+
+                    for (int i=0;i<5;i++) {
+                        int y = 102 + i * 36;
+                        bitmap(c, mi[i], 760, y - 15, 787, y + 12);
+                        txt(c, labels[i], 796, y + 6, 14, false);
+                        right(c, vals[i], 976, y + 6, i==2 ? 14 : 16, true, Color.WHITE);
+                    }
+
+                    txt(c, "Prognoza godzinowa", 44, 350, 19, true);
+                    line(c, 44, 362, 492, 362);
+                    txt(c, "Prognoza na 5 dni", 541, 350, 19, true);
+                    line(c, 541, 362, 977, 362);
+
+                    JSONArray ht = hourly.getJSONArray("time");
+                    JSONArray hT = hourly.getJSONArray("temperature_2m");
+                    JSONArray hc = hourly.getJSONArray("weather_code");
+                    JSONArray pr = hourly.getJSONArray("precipitation_probability");
+
+                    String currentHour = new SimpleDateFormat("yyyy-MM-dd'T'HH:00", Locale.US).format(now);
+                    int start = 0;
+                    for (int i=0;i<ht.length();i++) {
+                        if (ht.getString(i).compareTo(currentHour) >= 0) { start = i; break; }
+                    }
+
+                    for (int k=0;k<6 && start+k<ht.length();k++) {
+                        int z = start + k;
+                        float x = 68 + k * 80;
+                        if (k>0) line(c, x-40, 374, x-40, 507);
+
+                        String iso = ht.getString(z);
+                        center(c, hm(iso), x, 389, 13, false, Color.WHITE);
+                        bitmap(c, weatherIcon(hc.getInt(z), nightForTime(daily, iso)),
+                               (int)x-30, 395, (int)x+30, 455);
+                        center(c, rnd(hT.getDouble(z)) + "°", x, 481, 18, true, Color.WHITE);
+                        txtColor(c, "●", x-24, 505, 12, false, Color.rgb(42, 207, 255));
+                        center(c, pr.optInt(z,0) + "%", x+7, 505, 12, true, Color.rgb(42, 207, 255));
+                    }
+
+                    JSONArray dt = daily.getJSONArray("time");
+                    JSONArray mx = daily.getJSONArray("temperature_2m_max");
+                    JSONArray mn = daily.getJSONArray("temperature_2m_min");
+                    JSONArray dc = daily.getJSONArray("weather_code");
+                    JSONArray pp = daily.getJSONArray("precipitation_probability_max");
+
+                    SimpleDateFormat inf = new SimpleDateFormat("yyyy-MM-dd", Locale.US);
+                    SimpleDateFormat dayFmt = new SimpleDateFormat("EEE", new Locale("pl","PL"));
+                    SimpleDateFormat dateFmt = new SimpleDateFormat("dd.MM", Locale.US);
+
+                    for (int k=1;k<=5 && k<dt.length();k++) {
+                        float x = 565 + (k-1) * 91;
+                        if (k>1) line(c, x-45, 374, x-45, 507);
+
+                        Date day = inf.parse(dt.getString(k));
+                        center(c, dayFmt.format(day), x, 387, 14, true, Color.WHITE);
+                        center(c, dateFmt.format(day), x, 406, 11, false, Color.WHITE);
+                        bitmap(c, weatherIcon(dc.getInt(k), false),
+                               (int)x-29, 411, (int)x+29, 467);
+                        center(c, rnd(mx.getDouble(k)) + "°", x, 486, 18, true, Color.WHITE);
+                        center(c, rnd(mn.getDouble(k)) + "°", x, 504, 13, false, Color.rgb(112, 201, 255));
+                        txtColor(c, "●", x-22, 520, 11, false, Color.rgb(42, 207, 255));
+                        center(c, pp.optInt(k,0) + "%", x+7, 520, 11, true, Color.rgb(42, 207, 255));
+                    }
+                } catch (Exception ignored) {}
+            } else {
+                bitmap(c, weatherIcon(code, night), 350, 76, 510, 236);
+                center(c, "--°C", 625, 166, 60, true, Color.WHITE);
+                center(c, "Pobieranie pogody…", 625, 199, 16, true, Color.WHITE);
+                txt(c, "Prognoza godzinowa", 44, 350, 19, true);
+                line(c, 44, 362, 492, 362);
+                txt(c, "Prognoza na 5 dni", 541, 350, 19, true);
+                line(c, 541, 362, 977, 362);
+            }
+
+            p.setColor(Color.argb(145, 0, 0, 0));
+            p.setStyle(Paint.Style.FILL);
+            c.drawRect(0, 552, 1024, 600, p);
+            txt(c, "Stacja Pogodowa", 24, 580, 14, false);
+            right(c, status, 988, 580, 11, false, Color.WHITE);
+
+            raw.restore();
+        }
+    }
+
+    void hide() {
+        getWindow().getDecorView().setSystemUiVisibility(
+            View.SYSTEM_UI_FLAG_FULLSCREEN |
+            View.SYSTEM_UI_FLAG_HIDE_NAVIGATION |
+            View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY |
+            View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN |
+            View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION |
+            View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+        );
+    }
+
+    @Override public void onWindowFocusChanged(boolean f) {
+        super.onWindowFocusChanged(f);
+        if (f) hide();
+    }
+
+    @Override public void onBackPressed() {}
 }
