@@ -4,6 +4,7 @@ import android.app.Activity;
 import android.os.*;
 import android.graphics.Color;
 import android.graphics.Typeface;
+import android.graphics.drawable.GradientDrawable;
 import android.view.*;
 import android.widget.*;
 import org.json.*;
@@ -38,7 +39,7 @@ public class MainActivity extends Activity {
  TextView tv(String s,int sp){TextView v=new TextView(this);v.setText(s);v.setTextColor(Color.WHITE);v.setTextSize(sp);v.setGravity(Gravity.CENTER_VERTICAL);return v;}
  LinearLayout row(){LinearLayout l=new LinearLayout(this);l.setOrientation(LinearLayout.HORIZONTAL);return l;}
  void build(){
-  root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);root.setPadding(20,10,20,6);root.setBackgroundColor(Color.rgb(5,42,76));setContentView(root);
+  root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);root.setPadding(20,10,20,6);root.setBackgroundResource(R.drawable.bg_cloudy);setContentView(root);
   LinearLayout top=row();root.addView(top,new LinearLayout.LayoutParams(-1,300));
   LinearLayout left=new LinearLayout(this);left.setOrientation(LinearLayout.VERTICAL);top.addView(left,new LinearLayout.LayoutParams(0,-1,1.25f));
   clock=tv("--:--",110);clock.setTypeface(null,Typeface.BOLD);left.addView(clock,new LinearLayout.LayoutParams(-1,150));
@@ -48,7 +49,9 @@ public class MainActivity extends Activity {
   LinearLayout ct=new LinearLayout(this);ct.setOrientation(LinearLayout.VERTICAL);cur.addView(ct,new LinearLayout.LayoutParams(0,-1,1));
   temp=tv("--°C",54);temp.setTypeface(null,Typeface.BOLD);ct.addView(temp,new LinearLayout.LayoutParams(-1,65));desc=tv("Oczekiwanie na dane…",20);desc.setTypeface(null,Typeface.BOLD);ct.addView(desc);
 
-  LinearLayout right=new LinearLayout(this);right.setOrientation(LinearLayout.VERTICAL);right.setPadding(28,12,0,0);top.addView(right,new LinearLayout.LayoutParams(0,-1,1));
+  LinearLayout right=new LinearLayout(this);right.setOrientation(LinearLayout.VERTICAL);right.setPadding(28,12,12,8);
+  GradientDrawable rg=new GradientDrawable();rg.setColor(Color.argb(175,3,35,62));rg.setCornerRadius(18);right.setBackground(rg);
+  LinearLayout.LayoutParams rlp=new LinearLayout.LayoutParams(0,-1,1);rlp.setMargins(5,5,5,5);top.addView(right,rlp);
   TextView city=tv("SKARŻYSKO-KAMIENNA",18);city.setGravity(Gravity.RIGHT);city.setTypeface(null,Typeface.BOLD);right.addView(city,new LinearLayout.LayoutParams(-1,60));
   feels=detail(right,"Odczuwalna: --°C");humidity=detail(right,"Wilgotność: --%");wind=detail(right,"Wiatr: -- km/h");sunrise=detail(right,"Wschód słońca: --:--");sunset=detail(right,"Zachód słońca: --:--");
 
@@ -58,12 +61,17 @@ public class MainActivity extends Activity {
   status=tv("Łączenie…",11);root.addView(status,new LinearLayout.LayoutParams(-1,22));
  }
  TextView detail(LinearLayout p,String s){TextView v=tv(s,19);p.addView(v,new LinearLayout.LayoutParams(-1,43));return v;}
- LinearLayout panel(String title,LinearLayout parent,float weight){LinearLayout p=new LinearLayout(this);p.setOrientation(LinearLayout.VERTICAL);p.setPadding(10,5,10,4);parent.addView(p,new LinearLayout.LayoutParams(0,-1,weight));TextView t=tv(title,19);t.setTypeface(null,Typeface.BOLD);p.addView(t,new LinearLayout.LayoutParams(-1,35));return p;}
+ LinearLayout panel(String title,LinearLayout parent,float weight){
+  LinearLayout p=new LinearLayout(this);p.setOrientation(LinearLayout.VERTICAL);p.setPadding(12,6,12,5);
+  GradientDrawable glass=new GradientDrawable();glass.setColor(Color.argb(205,3,35,62));glass.setCornerRadius(18);glass.setStroke(2,Color.rgb(25,155,220));p.setBackground(glass);
+  LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,-1,weight);lp.setMargins(5,3,5,3);parent.addView(p,lp);
+  TextView t=tv(title,19);t.setTypeface(null,Typeface.BOLD);p.addView(t,new LinearLayout.LayoutParams(-1,35));return p;
+ }
  void updateClock(){Date n=new Date();clock.setText(new SimpleDateFormat("HH:mm",Locale.getDefault()).format(n));date.setText(new SimpleDateFormat("EEEE, d MMMM yyyy",new Locale("pl","PL")).format(n));}
  void fetch(){
   String provider="TLS";
   try { provider=SSLContext.getInstance("TLS").getProvider().getName(); } catch(Exception ignored){}
-  status.setText("Łączenie… TLS provider: "+provider);
+  status.setText("Łączenie…");
   new Thread(new Runnable(){public void run(){try{String j=get(URLS);getPreferences(0).edit().putString("cache",j).apply();show(j,true);}catch(final Exception e){
    final String c=getPreferences(0).getString("cache",null);
    if(c!=null) show(c,false);
@@ -102,15 +110,29 @@ public class MainActivity extends Activity {
   c.setSSLSocketFactory(sc.getSocketFactory());
   c.setConnectTimeout(20000);c.setReadTimeout(20000);
   c.setRequestProperty("Accept","application/json");
-  c.setRequestProperty("User-Agent","PrestigioWeather/7");
+  c.setRequestProperty("User-Agent","PrestigioWeather/10");
   InputStream in=c.getInputStream();BufferedReader r=new BufferedReader(new InputStreamReader(in,"UTF-8"));StringBuilder b=new StringBuilder();String x;while((x=r.readLine())!=null)b.append(x);r.close();return b.toString();
  }
  void show(final String raw,final boolean online){runOnUiThread(new Runnable(){public void run(){try{render(new JSONObject(raw));status.setText(online?"Dane pobrane: "+new SimpleDateFormat("dd.MM.yyyy HH:mm").format(new Date()):"Offline — ostatnie zapisane dane");}catch(Exception e){status.setText("Błąd danych pogodowych");}}});}
+ int backgroundFor(int code, boolean night){
+  if(night)return R.drawable.bg_night;
+  if(code==0)return R.drawable.bg_sunny;
+  if(code==45||code==48)return R.drawable.bg_fog;
+  if(code>=71&&code<=77)return R.drawable.bg_snow;
+  if(code>=95)return R.drawable.bg_storm;
+  if((code>=51&&code<=67)||(code>=80&&code<=82))return R.drawable.bg_rain;
+  return R.drawable.bg_cloudy;
+ }
+ boolean isNight(JSONObject daily)throws Exception{
+  String sr=daily.getJSONArray("sunrise").getString(0), ss=daily.getJSONArray("sunset").getString(0);
+  String now=new SimpleDateFormat("yyyy-MM-dd'T'HH:mm",Locale.US).format(new Date());
+  return now.compareTo(sr)<0 || now.compareTo(ss)>0;
+ }
  int icon(int c){if(c==0)return R.drawable.ic_sun;if(c<=2)return R.drawable.ic_partly;if(c==3||c==45||c==48)return R.drawable.ic_cloud;if((c>=51&&c<=67)||(c>=80&&c<=82))return R.drawable.ic_rain;if(c>=71&&c<=77)return R.drawable.ic_snow;return R.drawable.ic_cloud;}
  String text(int c){if(c==0)return"Bezchmurnie";if(c<=2)return"Częściowe zachmurzenie";if(c==3)return"Pochmurno";if(c==45||c==48)return"Mgła";if(c>=51&&c<=57)return"Mżawka";if(c>=61&&c<=67)return"Deszcz";if(c>=71&&c<=77)return"Śnieg";if(c>=80&&c<=82)return"Przelotny deszcz";if(c>=95)return"Burza";return"Pogoda";}
  int rnd(double d){return(int)Math.round(d);} String hm(String s){return s.length()>=16?s.substring(11,16):"--:--";}
  void render(JSONObject j)throws Exception{
-  JSONObject c=j.getJSONObject("current");JSONObject d=j.getJSONObject("daily");JSONObject ho=j.getJSONObject("hourly");int code=c.getInt("weather_code");
+  JSONObject c=j.getJSONObject("current");JSONObject d=j.getJSONObject("daily");JSONObject ho=j.getJSONObject("hourly");int code=c.getInt("weather_code");root.setBackgroundResource(backgroundFor(code,isNight(d)));
   currentIcon.setImageResource(icon(code));temp.setText(rnd(c.getDouble("temperature_2m"))+"°C");desc.setText(text(code));feels.setText("Odczuwalna: "+rnd(c.getDouble("apparent_temperature"))+"°C");humidity.setText("Wilgotność: "+rnd(c.getDouble("relative_humidity_2m"))+"%");wind.setText("Wiatr: "+rnd(c.getDouble("wind_speed_10m"))+" km/h");
   sunrise.setText("Wschód słońca: "+hm(d.getJSONArray("sunrise").getString(0)));sunset.setText("Zachód słońca: "+hm(d.getJSONArray("sunset").getString(0)));
   hours.removeAllViews();JSONArray ht=ho.getJSONArray("time"),hT=ho.getJSONArray("temperature_2m"),hc=ho.getJSONArray("weather_code"),pr=ho.getJSONArray("precipitation_probability");String now=new SimpleDateFormat("yyyy-MM-dd'T'HH:00").format(new Date());int start=0;for(int i=0;i<ht.length();i++)if(ht.getString(i).compareTo(now)>=0){start=i;break;}
