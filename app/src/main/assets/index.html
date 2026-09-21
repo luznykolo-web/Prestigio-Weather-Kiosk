@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<title>Stacja pogodowa</title>
+<style>
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#071018;color:#fff;font-family:Arial,sans-serif}
+*{box-sizing:border-box}
+#app{height:100vh;padding:10px 18px;display:flex;flex-direction:column}
+.top{display:flex;align-items:flex-start;justify-content:space-between}
+#clock{font-size:108px;line-height:.88;font-weight:700;letter-spacing:-5px}
+#date{font-size:20px;color:#b8c7d5;margin:5px 0 0 6px;text-transform:capitalize}
+.place{text-align:right;font-size:20px;font-weight:700;letter-spacing:1px;color:#d9e8f5;margin-top:6px}
+.main{display:flex;align-items:center;justify-content:space-between;flex:1;min-height:0}
+.current{display:flex;align-items:center;min-width:48%}
+.icon{font-size:92px;width:118px;text-align:center}
+.temp{font-size:84px;font-weight:700;line-height:1}
+.desc{font-size:24px;margin-top:2px;color:#e7f1f8}
+.details{font-size:20px;line-height:1.65;color:#c9d8e4;min-width:44%}
+.details b{color:white}
+.hourly{display:flex;justify-content:space-between;border-top:1px solid #27404f;border-bottom:1px solid #27404f;padding:8px 0;margin-top:2px}
+.hour{text-align:center;width:16.66%;font-size:17px}.hour .hi{font-size:27px;margin:3px 0}.muted{color:#9eb2c0}
+.days{display:flex;justify-content:space-between;padding-top:7px}
+.day{text-align:center;width:20%;font-size:17px}.day .di{font-size:31px;margin:2px}.day .dt{font-size:21px;font-weight:700}
+#error{position:absolute;right:10px;bottom:4px;color:#ffb0b0;font-size:11px}
+</style>
+</head>
+<body>
+<div id="app">
+ <div class="top"><div><div id="clock">--:--</div><div id="date"></div></div><div class="place">SKARŻYSKO-KAMIENNA</div></div>
+ <div class="main">
+  <div class="current"><div id="icon" class="icon">☁</div><div><div id="temp" class="temp">--°</div><div id="desc" class="desc">Pobieranie pogody…</div></div></div>
+  <div class="details">
+   Odczuwalna: <b id="feels">--°C</b><br>
+   Wilgotność: <b id="humidity">--%</b><br>
+   Wiatr: <b id="wind">-- km/h</b><br>
+   Wschód: <b id="sunrise">--:--</b> &nbsp; Zachód: <b id="sunset">--:--</b>
+  </div>
+ </div>
+ <div id="hourly" class="hourly"></div>
+ <div id="days" class="days"></div>
+</div>
+<div id="error"></div>
+<script>
+var LAT=51.1136,LON=20.8716;
+var API="https://api.open-meteo.com/v1/forecast?latitude="+LAT+"&longitude="+LON+
+"&current=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,wind_speed_10m"+
+"&hourly=temperature_2m,weather_code&daily=weather_code,temperature_2m_max,temperature_2m_min,sunrise,sunset"+
+"&timezone=Europe%2FWarsaw&forecast_days=6";
+
+function pad(n){return n<10?"0"+n:""+n}
+function clock(){
+ var d=new Date();
+ document.getElementById("clock").innerHTML=pad(d.getHours())+":"+pad(d.getMinutes());
+ var days=["niedziela","poniedziałek","wtorek","środa","czwartek","piątek","sobota"];
+ var mons=["stycznia","lutego","marca","kwietnia","maja","czerwca","lipca","sierpnia","września","października","listopada","grudnia"];
+ document.getElementById("date").innerHTML=days[d.getDay()]+", "+d.getDate()+" "+mons[d.getMonth()]+" "+d.getFullYear();
+}
+function wx(c){
+ if(c===0)return["☀","Bezchmurnie"];
+ if(c===1)return["🌤","Przeważnie pogodnie"];
+ if(c===2)return["⛅","Częściowe zachmurzenie"];
+ if(c===3)return["☁","Pochmurno"];
+ if(c===45||c===48)return["🌫","Mgła"];
+ if(c===51||c===53||c===55||c===56||c===57)return["🌦","Mżawka"];
+ if(c===61||c===63||c===65||c===66||c===67||c===80||c===81||c===82)return["🌧","Deszcz"];
+ if(c===71||c===73||c===75||c===77||c===85||c===86)return["❄","Śnieg"];
+ if(c===95||c===96||c===99)return["⛈","Burza"];
+ return["☁","Pogoda"];
+}
+function hh(s){return s?s.substring(11,16):"--:--"}
+function round(v){return Math.round(v)}
+function render(j){
+ var c=j.current,w=wx(c.weather_code);
+ document.getElementById("icon").innerHTML=w[0];
+ document.getElementById("temp").innerHTML=round(c.temperature_2m)+"°";
+ document.getElementById("desc").innerHTML=w[1];
+ document.getElementById("feels").innerHTML=round(c.apparent_temperature)+"°C";
+ document.getElementById("humidity").innerHTML=round(c.relative_humidity_2m)+"%";
+ document.getElementById("wind").innerHTML=round(c.wind_speed_10m)+" km/h";
+ document.getElementById("sunrise").innerHTML=hh(j.daily.sunrise[0]);
+ document.getElementById("sunset").innerHTML=hh(j.daily.sunset[0]);
+
+ var now=new Date(), start=0, times=j.hourly.time;
+ for(var i=0;i<times.length;i++){if(new Date(times[i]).getTime()>=now.getTime()){start=i;break}}
+ var h="";
+ for(i=start;i<start+6 && i<times.length;i++){
+   var wi=wx(j.hourly.weather_code[i]);
+   h+='<div class="hour"><div class="muted">'+times[i].substring(11,16)+'</div><div class="hi">'+wi[0]+'</div><b>'+round(j.hourly.temperature_2m[i])+'°</b></div>';
+ }
+ document.getElementById("hourly").innerHTML=h;
+
+ var names=["Nd","Pn","Wt","Śr","Cz","Pt","So"], dhtml="";
+ for(i=1;i<6 && i<j.daily.time.length;i++){
+   var dt=new Date(j.daily.time[i]+"T12:00:00"),di=wx(j.daily.weather_code[i]);
+   dhtml+='<div class="day"><div class="muted">'+names[dt.getDay()]+'</div><div class="di">'+di[0]+'</div><div class="dt">'+round(j.daily.temperature_2m_max[i])+'° <span class="muted">'+round(j.daily.temperature_2m_min[i])+'°</span></div></div>';
+ }
+ document.getElementById("days").innerHTML=dhtml;
+ document.getElementById("error").innerHTML="";
+}
+function load(){
+ var x=new XMLHttpRequest();
+ x.open("GET",API,true);
+ x.onreadystatechange=function(){
+  if(x.readyState===4){
+   if(x.status>=200&&x.status<300){
+    try{render(JSON.parse(x.responseText));localStorage.setItem("weather",x.responseText)}catch(e){}
+   }else{
+    document.getElementById("error").innerHTML="Brak połączenia — pokazuję ostatnie dane";
+   }
+  }
+ };
+ x.onerror=function(){document.getElementById("error").innerHTML="Brak połączenia — pokazuję ostatnie dane"};
+ x.send();
+}
+try{var old=localStorage.getItem("weather");if(old)render(JSON.parse(old))}catch(e){}
+clock();setInterval(clock,1000);load();setInterval(load,15*60*1000);
+</script>
+</body>
+</html>
